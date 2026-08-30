@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS Static Website Deployment</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root{
+    --bg:#080C11;
+    --panel:#0F1620;
+    --panel-2:#131C28;
+    --line:#1E2A38;
+    --cyan:#5EEAD4;
+    --violet:#A78BFA;
+    --amber:#FBBF77;
+    --text:#E9EFF3;
+    --muted:#7C8B9A;
+  }
+
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    background:var(--bg);color:var(--text);
+    font-family:'Inter',sans-serif;line-height:1.6;overflow-x:hidden;
+  }
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:0.01ms !important; transition-duration:0.01ms !important;}
+  }
+  a{color:inherit;text-decoration:none;}
+
+  .bg-fx{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;}
+  .bg-fx .orb{position:absolute;border-radius:50%;filter:blur(90px);opacity:0.16;}
+  .orb-1{width:520px;height:520px;background:var(--cyan);top:-180px;left:-120px;}
+  .orb-2{width:460px;height:460px;background:var(--violet);top:120px;right:-160px;}
+  .bg-fx .grid{
+    position:absolute;inset:0;
+    background-image:linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+    background-size:56px 56px;
+    mask-image:linear-gradient(180deg, rgba(0,0,0,0.9), transparent 70%);
+  }
+
+  .wrap{max-width:1080px;margin:0 auto;padding:0 32px;position:relative;z-index:1;}
+
+  nav{display:flex;justify-content:space-between;align-items:center;padding:30px 0;}
+  .brand{display:flex;align-items:center;gap:10px;font-family:'Sora',sans-serif;font-weight:700;font-size:1.02rem;}
+  .brand-mark{
+    width:24px;height:24px;border-radius:7px;
+    background:linear-gradient(135deg, var(--cyan), var(--violet));
+    box-shadow:0 0 18px rgba(94,234,212,0.35);
+  }
+  nav .links{display:flex;gap:34px;font-size:0.9rem;color:var(--muted);}
+  nav .links a{transition:color 0.15s ease;}
+  nav .links a:hover{color:var(--cyan);}
+
+  header.hero{padding:80px 0 92px;}
+  .eyebrow{
+    font-family:'JetBrains Mono',monospace;font-size:0.76rem;letter-spacing:0.12em;
+    text-transform:uppercase;color:var(--cyan);
+    display:flex;align-items:center;gap:10px;margin-bottom:24px;
+  }
+  .eyebrow::before{content:'';width:22px;height:1px;background:var(--cyan);}
+
+  h1{
+    font-family:'Sora',sans-serif;font-weight:800;
+    font-size:clamp(2.4rem, 5vw, 3.7rem);line-height:1.08;letter-spacing:-0.02em;
+    max-width:800px;margin-bottom:24px;
+  }
+  h1 .accent{
+    background:linear-gradient(90deg, var(--cyan), var(--violet));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+
+  .hero-sub{color:var(--muted);font-size:1.08rem;max-width:580px;margin-bottom:40px;}
+
+  .hero-actions{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:64px;}
+  .btn{
+    padding:13px 28px;border-radius:8px;font-size:0.9rem;font-weight:600;
+    display:inline-flex;align-items:center;gap:8px;cursor:pointer;
+    transition:transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  }
+  .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:3px;}
+  .btn-primary{background:linear-gradient(90deg, var(--cyan), #7dd3fc);color:#06121A;}
+  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(94,234,212,0.22);}
+  .btn-ghost{border:1px solid var(--line);color:var(--text);}
+  .btn-ghost:hover{border-color:var(--cyan);color:var(--cyan);}
+
+  /* SIGNATURE: animated request path S3 -> CloudFront -> Browser */
+  .flow-visual{
+    background:var(--panel);border:1px solid var(--line);border-radius:16px;
+    padding:36px;position:relative;overflow:hidden;
+  }
+  .flow-visual::before{
+    content:'';position:absolute;top:0;left:0;right:0;height:1px;
+    background:linear-gradient(90deg, transparent, var(--cyan), transparent);
+    opacity:0.5;
+  }
+  .flow-track{
+    display:flex;align-items:center;justify-content:space-between;position:relative;
+    padding:10px 0 28px;
+  }
+  .flow-track::before{
+    content:'';position:absolute;top:50%;left:24px;right:24px;height:1px;
+    background:var(--line);transform:translateY(-14px);
+  }
+  .flow-track::after{
+    content:'';position:absolute;top:50%;left:24px;width:calc(100% - 48px);height:2px;
+    transform:translateY(-14px);
+    background:linear-gradient(90deg, var(--cyan), var(--violet));
+    background-size:200% 100%;
+    animation:travel 3.2s linear infinite;
+  }
+  @keyframes travel{
+    0%{background-position:100% 0; opacity:0;}
+    5%{opacity:1;}
+    95%{opacity:1;}
+    100%{background-position:-100% 0; opacity:0;}
+  }
+  .flow-node{
+    display:flex;flex-direction:column;align-items:center;gap:10px;position:relative;z-index:1;
+    flex:1;
+  }
+  .flow-dot{
+    width:44px;height:44px;border-radius:12px;background:var(--panel-2);
+    border:1px solid var(--line);display:flex;align-items:center;justify-content:center;
+    font-size:1.15rem;
+  }
+  .flow-label{font-family:'JetBrains Mono',monospace;font-size:0.72rem;color:var(--muted);text-align:center;}
+  .flow-label b{color:var(--text);display:block;font-family:'Sora',sans-serif;font-weight:600;font-size:0.82rem;margin-bottom:2px;}
+
+  .flow-log{
+    border-top:1px solid var(--line);margin-top:6px;padding-top:20px;
+    display:flex;justify-content:space-between;align-items:center;
+    font-family:'JetBrains Mono',monospace;font-size:0.8rem;
+  }
+  .flow-log .file{color:var(--muted);}
+  .flow-log .badge{color:var(--cyan);display:flex;align-items:center;gap:7px;}
+  .flow-log .badge::before{
+    content:'';width:6px;height:6px;border-radius:50%;background:var(--cyan);
+    box-shadow:0 0 6px var(--cyan);
+  }
+
+  section{padding:82px 0;border-top:1px solid var(--line);}
+  .section-head{margin-bottom:48px;}
+  .section-num{
+    font-family:'JetBrains Mono',monospace;color:var(--cyan);font-size:0.78rem;
+    letter-spacing:0.1em;margin-bottom:10px;display:block;
+  }
+  h2{font-family:'Sora',sans-serif;font-weight:700;font-size:1.9rem;letter-spacing:-0.015em;}
+  .section-desc{color:var(--muted);max-width:600px;margin-top:12px;font-size:0.98rem;}
+
+  .features{
+    display:grid;grid-template-columns:repeat(2,1fr);gap:1px;
+    background:var(--line);border:1px solid var(--line);border-radius:14px;overflow:hidden;
+  }
+  .feature{background:var(--panel);padding:32px;transition:background 0.2s ease;}
+  .feature:hover{background:var(--panel-2);}
+  .feature-tag{
+    font-family:'JetBrains Mono',monospace;font-size:0.72rem;color:var(--cyan);
+    letter-spacing:0.08em;margin-bottom:14px;display:block;
+  }
+  .feature h3{font-family:'Sora',sans-serif;font-size:1.13rem;font-weight:700;margin-bottom:10px;}
+  .feature p{color:var(--muted);font-size:0.92rem;}
+
+  .stack-row{display:flex;flex-wrap:wrap;gap:10px;}
+  .chip{
+    font-family:'JetBrains Mono',monospace;font-size:0.82rem;padding:9px 17px;border-radius:20px;
+    border:1px solid var(--line);color:var(--muted);
+    transition:border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+  }
+  .chip:hover{border-color:var(--cyan);color:var(--cyan);transform:translateY(-1px);}
+
+  .metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:14px;overflow:hidden;}
+  .metric{background:var(--panel);padding:28px 24px;}
+  .metric-num{font-family:'Sora',sans-serif;font-weight:800;font-size:2rem;
+    background:linear-gradient(90deg, var(--cyan), var(--violet));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .metric-label{color:var(--muted);font-size:0.82rem;margin-top:6px;}
+
+  .steps-list{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:14px;overflow:hidden;}
+  .step-row{
+    display:flex;gap:20px;padding:22px 28px;border-bottom:1px solid var(--line);
+    background:var(--panel);
+  }
+  .step-row:last-child{border-bottom:none;}
+  .step-num{
+    font-family:'JetBrains Mono',monospace;color:var(--cyan);font-size:0.9rem;
+    flex:0 0 32px;
+  }
+  .step-body b{font-family:'Sora',sans-serif;font-weight:600;display:block;margin-bottom:4px;}
+  .step-body span{color:var(--muted);font-size:0.9rem;}
+
+  footer{padding:64px 0 48px;text-align:center;}
+  footer h2{margin-bottom:14px;}
+  footer .section-desc{margin:0 auto 32px;}
+  .footer-links{display:flex;gap:20px;justify-content:center;flex-wrap:wrap;margin-bottom:40px;}
+  .footer-meta{color:var(--muted);font-size:0.8rem;font-family:'JetBrains Mono',monospace;}
+
+  @media (max-width:720px){
+    .features{grid-template-columns:1fr;}
+    .metrics{grid-template-columns:1fr;}
+    .flow-track{flex-wrap:wrap;gap:24px;}
+    .flow-track::before,.flow-track::after{display:none;}
+    nav .links{display:none;}
+    .flow-log{flex-direction:column;align-items:flex-start;gap:8px;}
+    .step-row{flex-direction:column;gap:6px;}
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-fx">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="grid"></div>
+</div>
+
+<div class="wrap">
+
+  <nav>
+    <div class="brand"><span class="brand-mark"></span>AWS STATIC WEBSITE DEPLOYMENT</div>
+    <div class="links">
+      <a href="#architecture">Architecture</a>
+      <a href="#steps">Setup</a>
+      <a href="#stack">Stack</a>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div class="eyebrow">S3 · Static Hosting · Cloud Computing</div>
+    <h1>A static site, hosted<br><span class="accent">the way AWS actually does it.</span></h1>
+    <p class="hero-sub">This project deploys a static HTML/CSS website using Amazon S3 for storage and public web hosting — no server ever provisioned or managed. CloudFront + HTTPS delivery is planned as a next step.</p>
+    <div class="hero-actions">
+      <a href="#architecture" class="btn btn-primary">View architecture</a>
+      <a href="#stack" class="btn btn-ghost">See tech stack</a>
+    </div>
+
+    <div class="flow-visual">
+      <div class="flow-track">
+        <div class="flow-node">
+          <div class="flow-dot">▤</div>
+          <div class="flow-label"><b>S3 Bucket</b>static hosting enabled</div>
+        </div>
+        <div class="flow-node">
+          <div class="flow-dot">⇄</div>
+          <div class="flow-label"><b>Bucket Policy</b>public read access</div>
+        </div>
+        <div class="flow-node">
+          <div class="flow-dot">📄</div>
+          <div class="flow-label"><b>Index Document</b>index.html served</div>
+        </div>
+        <div class="flow-node">
+          <div class="flow-dot">🌐</div>
+          <div class="flow-label"><b>Visitor</b>anywhere, any device</div>
+        </div>
+      </div>
+      <div class="flow-log">
+        <span class="file">bucket-name.s3-website.ap-south-2.amazonaws.com</span>
+        <span class="badge">live · S3 hosted</span>
+      </div>
+    </div>
+  </header>
+
+  <section id="architecture">
+    <div class="section-head">
+      <span class="section-num">// ARCHITECTURE</span>
+      <h2>One managed service, zero servers</h2>
+      <p class="section-desc">S3 stores and serves the raw files directly via static website hosting. Nothing in between needs patching or scaling by hand.</p>
+    </div>
+    <div class="metrics">
+      <div class="metric">
+        <div class="metric-num">0</div>
+        <div class="metric-label">Servers provisioned</div>
+      </div>
+      <div class="metric">
+        <div class="metric-num">1</div>
+        <div class="metric-label">S3 region (ap-south-2)</div>
+      </div>
+      <div class="metric">
+        <div class="metric-num">$0</div>
+        <div class="metric-label">Domain purchased</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="steps">
+    <div class="section-head">
+      <span class="section-num">// SETUP</span>
+      <h2>How it was deployed</h2>
+      <p class="section-desc">The exact sequence used to take this page from a local HTML file to a live URL.</p>
+    </div>
+    <div class="steps-list">
+      <div class="step-row">
+        <div class="step-num">01</div>
+        <div class="step-body"><b>Create S3 bucket</b><span>Public access unblocked, versioning enabled so every file change stays recoverable.</span></div>
+      </div>
+      <div class="step-row">
+        <div class="step-num">02</div>
+        <div class="step-body"><b>Upload site files</b><span>index.html and assets uploaded directly to the bucket root.</span></div>
+      </div>
+      <div class="step-row">
+        <div class="step-num">03</div>
+        <div class="step-body"><b>Enable static website hosting</b><span>Bucket property turned on with index.html set as the index document.</span></div>
+      </div>
+      <div class="step-row">
+        <div class="step-num">04</div>
+        <div class="step-body"><b>Attach a public-read bucket policy</b><span>Grants s3:GetObject to all visitors — without it, every request returns Access Denied.</span></div>
+      </div>
+      <div class="step-row">
+        <div class="step-num">05</div>
+        <div class="step-body"><b>Verify the website endpoint</b><span>The S3 static website hosting URL is confirmed live and publicly reachable.</span></div>
+      </div>
+      <div class="step-row">
+        <div class="step-num">06</div>
+        <div class="step-body"><b>Next step: CloudFront + HTTPS</b><span>Planned once AWS account verification clears, to add a CDN layer and HTTPS support.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="stack">
+    <div class="section-head">
+      <span class="section-num">// STACK</span>
+      <h2>Built with</h2>
+    </div>
+    <div class="stack-row">
+      <span class="chip">Amazon S3</span>
+      <span class="chip">S3 Static Website Hosting</span>
+      <span class="chip">Bucket Versioning</span>
+      <span class="chip">IAM Bucket Policy</span>
+      <span class="chip">HTML5 / CSS3</span>
+    </div>
+  </section>
+
+  <footer>
+    <span class="section-num">// LIVE URL</span>
+    <h2>Served entirely from AWS</h2>
+    <p class="section-desc">No domain was purchased for this project — the S3 static website hosting URL is the live address for this site.</p>
+    <div class="footer-links">
+      <a href="#" class="btn btn-ghost">LinkedIn</a>
+      <a href="#" class="btn btn-ghost">GitHub</a>
+    </div>
+    <div class="footer-meta">MOHAMMED ASHIF S · CLOUD COMPUTING</div>
+  </footer>
+
+</div>
+
+</body>
+</html>
